@@ -83,7 +83,7 @@
   #lb { position: fixed; inset: 0; z-index: 20; display: none; background: rgba(10,8,6,.94);
     align-items: center; justify-content: center; }
   #lb.open { display: flex; }
-  #lb img { max-width: 94vw; max-height: 86vh; border-radius: 8px; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+  #lb img, #lb video { max-width: 94vw; max-height: 86vh; border-radius: 8px; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
   #lb .cap { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; color: #d9d2c7; font-size: 13px; }
   #lb button { position: absolute; border: 0; background: rgba(255,255,255,.12); color: #fff; width: 46px; height: 46px;
     border-radius: 50%; font-size: 22px; }
@@ -116,6 +116,7 @@
 
 <div id="lb" role="dialog" aria-modal="true">
   <img id="lb-img" alt="">
+  <video id="lb-vid" controls playsinline hidden></video>
   <div class="cap" id="lb-cap"></div>
   <button class="x" id="lb-x" aria-label="Close">×</button>
   <button class="prev" id="lb-prev" aria-label="Previous">‹</button>
@@ -126,6 +127,7 @@
 const COLORS = { "Adam": "var(--c-adam)", "Karen": "var(--c-karen)", "Adam & Karen": "var(--c-both)",
   "Cats": "var(--c-cats)", "Memes": "var(--c-memes)", "Miscellaneous": "var(--c-misc)" };
 const PAGE = 120;
+const VIDEO_BASE = "https://raw.githubusercontent.com/Adam01140114/photo-library-videos/main/v/";
 let key, manifest, current, shown = 0, lbIndex = -1;
 const urlCache = new Map();
 
@@ -224,17 +226,46 @@ document.getElementById("more").onclick = renderMore;
 new IntersectionObserver((e) => { if (e[0].isIntersecting && !document.getElementById("more").hidden) renderMore(); },
   { rootMargin: "800px" }).observe(document.getElementById("more"));
 
+const videoCache = new Map();
+function videoUrl(it) {
+  if (!videoCache.has(it.id)) {
+    videoCache.set(it.id, (async () => {
+      const parts = [];
+      for (let k = 0; k < it.p; k++) parts.push(await decrypt(await fetchBytes(VIDEO_BASE + it.id + "." + k)));
+      return URL.createObjectURL(new Blob(parts, { type: "video/mp4" }));
+    })().catch((e) => { videoCache.delete(it.id); throw e; }));
+  }
+  return videoCache.get(it.id);
+}
+function stopVideo() {
+  const vid = document.getElementById("lb-vid");
+  vid.pause(); vid.removeAttribute("src"); vid.load(); vid.hidden = true;
+}
 async function openLb(i) {
   const items = manifest[current];
   lbIndex = (i + items.length) % items.length;
-  const it = items[lbIndex], img = document.getElementById("lb-img");
+  const it = items[lbIndex], img = document.getElementById("lb-img"), vid = document.getElementById("lb-vid");
+  const cap = document.getElementById("lb-cap"), label = current + " · " + (lbIndex + 1) + " of " + items.length;
   document.getElementById("lb").classList.add("open");
-  document.getElementById("lb-cap").textContent = current + " · " + (lbIndex + 1) + " of " + items.length + (it.v ? " · video still" : "");
-  img.src = await imageUrl(it.id, "t");
-  const big = await imageUrl(it.id, "l");
-  if (items[lbIndex] === it) img.src = big;
+  stopVideo(); img.hidden = false;
+  cap.textContent = label + (it.v ? " · loading video…" : "");
+  img.src = await imageUrl(it.id, it.v ? "l" : "t");
+  if (!it.v) {
+    const big = await imageUrl(it.id, "l");
+    if (items[lbIndex] === it) img.src = big;
+    return;
+  }
+  if (!it.p) { cap.textContent = label + " · video not available"; return; }
+  try {
+    const url = await videoUrl(it);
+    if (items[lbIndex] !== it) return;
+    img.hidden = true; vid.hidden = false; vid.src = url; vid.play().catch(() => {});
+    cap.textContent = label + " · video";
+  } catch (e) {
+    if (items[lbIndex] === it) cap.textContent = label + " · couldn’t load this video";
+  }
 }
-function closeLb() { document.getElementById("lb").classList.remove("open"); lbIndex = -1; }
+function closeLb() { stopVideo(); document.getElementById("lb").classList.remove("open"); lbIndex = -1; }
 document.getElementById("lb-x").onclick = closeLb;
 document.getElementById("lb-prev").onclick = () => openLb(lbIndex - 1);
 document.getElementById("lb-next").onclick = () => openLb(lbIndex + 1);
