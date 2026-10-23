@@ -128,6 +128,7 @@ const COLORS = { "Adam": "var(--c-adam)", "Karen": "var(--c-karen)", "Adam & Kar
   "Cats": "var(--c-cats)", "Memes": "var(--c-memes)", "Miscellaneous": "var(--c-misc)" };
 const PAGE = 120;
 const VIDEO_BASE = "https://raw.githubusercontent.com/Adam01140114/photo-library-videos/main/v/";
+const LARGE_BASE = "https://raw.githubusercontent.com/Adam01140114/photo-library-videos/main/l/";
 let key, manifest, current, shown = 0, lbIndex = -1;
 const urlCache = new Map();
 
@@ -150,7 +151,7 @@ async function imageUrl(id, kind) {
   const k = id + kind;
   if (!urlCache.has(k)) {
     urlCache.set(k, (async () => {
-      const data = await decrypt(await fetchBytes("d/" + id + "." + kind));
+      const data = await decrypt(await fetchBytes(kind === "l" ? LARGE_BASE + id + ".l" : "d/" + id + "." + kind));
       return URL.createObjectURL(new Blob([data], { type: "image/jpeg" }));
     })());
   }
